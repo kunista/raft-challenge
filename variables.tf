@@ -7,7 +7,7 @@ variable "db_name" {
 }
 
 variable "master_username" {
-  default = "admin"
+  default = "flights_admin"
 }
 
 variable "master_password" {
