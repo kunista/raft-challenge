@@ -15,8 +15,4 @@ variable "master_password" {
   sensitive   = true
 }
 
-variable "cluster_arn" {}
-
-variable "secret_arn" {}
-
 variable "bucket_name" {}
