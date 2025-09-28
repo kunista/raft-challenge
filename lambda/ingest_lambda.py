@@ -19,7 +19,6 @@ def lambda_handler(event, context):
     content = response["Body"].read().decode("utf-8")
     reader = csv.DictReader(io.StringIO(content))
 
-    row_count = 0
     for row in reader:
         sql = """
         INSERT INTO flights (icao24, firstseen, lastseen, estarrivalairport)
@@ -38,9 +37,8 @@ def lambda_handler(event, context):
             sql=sql,
             parameters=params
         )
-        row_count += 1
 
     return {
         "statusCode": 200,
-        "body": f"{row_count} rows inserted from {key}"
+        "body": f"File {key} ingested successfully"
     }

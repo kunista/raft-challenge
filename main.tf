@@ -45,12 +45,10 @@ resource "aws_iam_role" "lambda_exec" {
   name = "lambda-rds-data-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
+      Effect = "Allow",
+      Principal = { Service = "lambda.amazonaws.com" },
       Action = "sts:AssumeRole"
     }]
   })
@@ -81,8 +79,8 @@ resource "aws_lambda_function" "query_lambda" {
 
   environment {
     variables = {
-      CLUSTER_ARN = var.cluster_arn
-      SECRET_ARN  = var.secret_arn
+      CLUSTER_ARN = module.aurora.cluster_arn
+      SECRET_ARN  = module.aurora.secret_arn
       DB_NAME     = var.db_name
     }
   }
@@ -98,8 +96,8 @@ resource "aws_lambda_function" "ingest_lambda" {
 
   environment {
     variables = {
-      CLUSTER_ARN = var.cluster_arn
-      SECRET_ARN  = var.secret_arn
+      CLUSTER_ARN = module.aurora.cluster_arn
+      SECRET_ARN  = module.aurora.secret_arn
       DB_NAME     = var.db_name
     }
   }
@@ -107,7 +105,7 @@ resource "aws_lambda_function" "ingest_lambda" {
 
 resource "aws_s3_bucket" "data_bucket" {
   bucket = var.bucket_name
-  acl    = "private"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_notification" "s3_event" {
