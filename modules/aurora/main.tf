@@ -16,6 +16,11 @@ resource "aws_rds_cluster" "aurora" {
   vpc_security_group_ids = [var.vpc_security_group_id]
   enable_http_endpoint = true
   skip_final_snapshot  = true
+  serverlessv2_scaling_configuration {
+    min_capacity = 0.5
+    max_capacity = 2
+  }
+
 }
 
 resource "aws_rds_cluster_instance" "aurora_instance" {

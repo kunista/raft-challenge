@@ -86,8 +86,14 @@ resource "aws_lambda_function" "query_lambda" {
   }
 }
 
+resource "aws_lambda_function_url" "summary_url" {
+  function_name      = aws_lambda_function.query_lambda.function_name
+  authorization_type = "NONE"
+}
+
 resource "aws_lambda_function" "ingest_lambda" {
   filename         = "lambda/ingest_lambda.zip"
+  timeout = 60
   function_name    = "IngestFlightData"
   role             = aws_iam_role.lambda_exec.arn
   handler          = "ingest_lambda.lambda_handler"
@@ -126,4 +132,69 @@ resource "aws_lambda_permission" "allow_s3" {
   function_name = aws_lambda_function.ingest_lambda.function_name
   principal     = "s3.amazonaws.com"
   source_arn    = aws_s3_bucket.data_bucket.arn
+}
+
+
+data "aws_secretsmanager_secret" "aurora_secret" {
+  name = "aurora-db-credentials"  
+}
+
+resource "aws_iam_policy" "lambda_secrets_policy" {
+  name = "lambda-secrets-access-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ],
+        Resource = data.aws_secretsmanager_secret.aurora_secret.arn
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "rds-data:ExecuteStatement",
+          "rds-data:BatchExecuteStatement",
+          "rds-data:BeginTransaction",
+          "rds-data:CommitTransaction",
+          "rds-data:RollbackTransaction"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_secrets_attachment" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_secrets_policy.arn
+}
+
+resource "null_resource" "init_flights_table" {
+  provisioner "local-exec" {
+    command = <<EOT
+aws rds-data execute-statement `
+  --resource-arn ${module.aurora.cluster_arn} `
+  --secret-arn ${module.aurora.secret_arn} `
+  --database ${var.db_name} `
+  --sql file://create_table.sql
+EOT
+
+    interpreter = ["PowerShell", "-Command"]
+  }
+
+  triggers = {
+    always_run = timestamp()
+  }
 }

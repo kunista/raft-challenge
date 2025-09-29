@@ -11,7 +11,7 @@ echo "Initializing Terraform"
 terraform init
 
 echo "Applying Terraform"
-terraform apply -auto-approve
+terraform apply -auto-approve -var="bucket_name=my-raft-bucket-20250928" -var="master_password=Kunista3484!"
 
 echo "Done. Upload CSV to the S3 bucket using:"
 echo "aws s3 cp your_data.csv s3://$(terraform output -raw bucket_name)/your_data.csv"
