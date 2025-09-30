@@ -1,92 +1,130 @@
 import os
-import boto3
-import csv
-import io
-from urllib.parse import unquote_plus
-
-rds = boto3.client("rds-data")
-s3 = boto3.client("s3")
-
-CLUSTER_ARN = os.environ["CLUSTER_ARN"]
-SECRET_ARN = os.environ["SECRET_ARN"]
-DB_NAME = os.environ["DB_NAME"]
-
-def string_or_null(value):
-    if value is None or value == "":
-        return {"isNull": True}
-    return {"stringValue": str(value)}
+import json
+import traceback
+import pymysql
 
 def lambda_handler(event, context):
+    print("🔔 Lambda triggered with event:", json.dumps(event)[:500])  # limit size
+
+    # Extract S3 bucket + key from event
     try:
         record = event["Records"][0]
         bucket = record["s3"]["bucket"]["name"]
-        key = unquote_plus(record["s3"]["object"]["key"])
+        key = record["s3"]["object"]["key"]
+        print(f"📦 Processing file: s3://{bucket}/{key}")
     except Exception as e:
-        return {"errorMessage": f"Malformed event structure: {str(e)}"}
+        print("❌ Failed to extract S3 info:", e)
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Invalid S3 event", "details": str(e)})
+        }
+
+    # DB connection details from environment
+    DB_HOST = os.environ["DB_HOST"]
+    DB_NAME = os.environ["DB_NAME"]
+    DB_USER = os.environ["DB_USER"]
+    DB_PASSWORD = os.environ["DB_PASSWORD"]
+
+    conn = None
+    cursor = None
 
     try:
-        response = s3.get_object(Bucket=bucket, Key=key)
-        body = response["Body"].read().decode("utf-8")
-        csv_reader = csv.DictReader(io.StringIO(body))
+        print("🔌 Connecting to Aurora...")
+        conn = pymysql.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+            connect_timeout=10,
+            autocommit=False  # transaction handling
+        )
+        cursor = conn.cursor()
+        print("✅ Aurora connection established")
 
-        for row in csv_reader:
-            params = [
-                string_or_null(row.get("callsign")),
-                string_or_null(row.get("number")),
-                string_or_null(row.get("icao24")),
-                string_or_null(row.get("registration")),
-                string_or_null(row.get("typecode")),
-                string_or_null(row.get("origin")),
-                string_or_null(row.get("destination")),
-                string_or_null(row.get("firstseen")),
-                string_or_null(row.get("lastseen")),
-                string_or_null(row.get("day")),
-                string_or_null(row.get("latitude_1")),
-                string_or_null(row.get("longitude_1")),
-                string_or_null(row.get("altitude_1")),
-                string_or_null(row.get("latitude_2")),
-                string_or_null(row.get("longitude_2")),
-                string_or_null(row.get("altitude_2")),
-            ]
+        # Step 1: Build the LOAD DATA FROM S3 query
+        load_sql = f"""
+        LOAD DATA FROM S3 's3://{bucket}/{key}'
+        INTO TABLE flights
+        FIELDS TERMINATED BY ','
+        ENCLOSED BY '"'
+        LINES TERMINATED BY '\\n'
+        IGNORE 1 LINES
+        (
+            callsign, number, icao24, registration, typecode,
+            origin, destination, @firstseen, @lastseen, @day,
+            @latitude_1, @longitude_1, @altitude_1,
+            @latitude_2, @longitude_2, @altitude_2
+        )
+        SET
+            firstseen    = STR_TO_DATE(LEFT(@firstseen, 19), '%Y-%m-%d %H:%i:%s'),
+            lastseen     = STR_TO_DATE(LEFT(@lastseen, 19), '%Y-%m-%d %H:%i:%s'),
+            day          = STR_TO_DATE(LEFT(@day, 10), '%Y-%m-%d'),
+            latitude_1   = CAST(NULLIF(@latitude_1, '') AS DOUBLE),
+            longitude_1  = CAST(NULLIF(@longitude_1, '') AS DOUBLE),
+            altitude_1   = CAST(NULLIF(@altitude_1, '') AS DOUBLE),
+            latitude_2   = CAST(NULLIF(@latitude_2, '') AS DOUBLE),
+            longitude_2  = CAST(NULLIF(@longitude_2, '') AS DOUBLE),
+            altitude_2   = CAST(NULLIF(@altitude_2, '') AS DOUBLE)
+        ;
+        """
 
-            insert_sql = """
-                INSERT INTO flights (
-                    callsign, number, icao24, registration, typecode,
-                    origin, destination, firstseen, lastseen, day,
-                    latitude_1, longitude_1, altitude_1,
-                    latitude_2, longitude_2, altitude_2
-                ) VALUES (
-                    :callsign, :number, :icao24, :registration, :typecode,
-                    :origin, :destination, :firstseen::timestamptz, :lastseen::timestamptz, :day::date,
-                    :latitude_1::double precision, :longitude_1::double precision, :altitude_1::double precision,
-                    :latitude_2::double precision, :longitude_2::double precision, :altitude_2::double precision
-                )
-            """
+        print("▶️ Running LOAD DATA FROM S3...")
+        cursor.execute(load_sql)
+        print("✅ LOAD DATA completed")
 
-            rds.execute_statement(
-                resourceArn=CLUSTER_ARN,
-                secretArn=SECRET_ARN,
-                database=DB_NAME,
-                sql=insert_sql,
-                parameters=[
-                    {"name": "callsign", "value": params[0]},
-                    {"name": "number", "value": params[1]},
-                    {"name": "icao24", "value": params[2]},
-                    {"name": "registration", "value": params[3]},
-                    {"name": "typecode", "value": params[4]},
-                    {"name": "origin", "value": params[5]},
-                    {"name": "destination", "value": params[6]},
-                    {"name": "firstseen", "value": params[7]},
-                    {"name": "lastseen", "value": params[8]},
-                    {"name": "day", "value": params[9]},
-                    {"name": "latitude_1", "value": params[10]},
-                    {"name": "longitude_1", "value": params[11]},
-                    {"name": "altitude_1", "value": params[12]},
-                    {"name": "latitude_2", "value": params[13]},
-                    {"name": "longitude_2", "value": params[14]},
-                    {"name": "altitude_2", "value": params[15]},
-                ],
-            )
-        return {"message": f"Successfully ingested {key} from bucket {bucket}"}
+        # Step 2: Refresh summary table
+        refresh_sql = """
+        REPLACE INTO flight_metrics
+        SELECT
+            1 AS id,
+            COUNT(*) AS row_count,
+            MAX(lastseen) AS last_transponder_seen_at,
+            COUNT(DISTINCT icao24) AS count_of_unique_transponders,
+            (
+                SELECT destination
+                FROM flights
+                GROUP BY destination
+                ORDER BY COUNT(*) DESC
+                LIMIT 1
+            ) AS most_popular_destination,
+            NOW() AS updated_at
+        FROM flights;
+        """
+
+        print("▶️ Refreshing flight_metrics summary table...")
+        cursor.execute(refresh_sql)
+        print("✅ Summary table refreshed")
+
+        # Commit both operations
+        print("💾 Committing transaction...")
+        conn.commit()
+        print("✅ Transaction committed successfully")
+
+        return {
+            "statusCode": 200,
+            "body": f"Loaded s3://{bucket}/{key} into flights and refreshed summary table"
+        }
+
     except Exception as e:
-        return {"errorMessage": str(e)}
+        if conn:
+            conn.rollback()
+            print("↩️ Transaction rolled back due to error")
+        tb = traceback.format_exc()
+        print("❌ Exception occurred:", e)
+        print(tb)
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": "Failed to load and refresh metrics",
+                "exception": str(e),
+                "traceback": tb
+            })
+        }
+
+    finally:
+        if cursor:
+            cursor.close()
+            print("🔒 Cursor closed")
+        if conn:
+            conn.close()
+            print("🔒 DB connection closed")
