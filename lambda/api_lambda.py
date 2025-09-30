@@ -1,48 +1,67 @@
-import boto3
 import os
 import json
-
-rds = boto3.client("rds-data")
-
-CLUSTER_ARN = os.environ["CLUSTER_ARN"]
-SECRET_ARN = os.environ["SECRET_ARN"]
-DB_NAME = os.environ["DB_NAME"]
+import pymysql
 
 def lambda_handler(event, context):
-    try:
-        sql = """
-        SELECT COUNT(*) AS row_count,
-               MAX(lastseen) AS last_transponder_seen_at,
-               COUNT(DISTINCT icao24) AS count_of_unique_transponders,
-               (SELECT destination
-                FROM flights
-                GROUP BY destination
-                ORDER BY COUNT(*) DESC
-                LIMIT 1) AS most_popular_destination
-        FROM flights
-        """
+    if event is None:
+        event = {}
+    elif isinstance(event, str):
+        try:
+            event = json.loads(event) or {}
+        except json.JSONDecodeError:
+            event = {}
 
-        response = rds.execute_statement(
-            secretArn=SECRET_ARN,
-            resourceArn=CLUSTER_ARN,
+    DB_HOST = os.environ.get("DB_HOST")
+    DB_NAME = os.environ.get("DB_NAME")
+    DB_USER = os.environ.get("DB_USER")
+    DB_PASSWORD = os.environ.get("DB_PASSWORD")
+
+    try:
+        conn = pymysql.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
             database=DB_NAME,
-            sql=sql
+            connect_timeout=10,
+            cursorclass=pymysql.cursors.DictCursor
         )
 
-        record = response["records"][0]
+        # Query the pre-aggregated summary row (id=1 is always the current snapshot)
+        sql = """
+        SELECT row_count,
+               last_transponder_seen_at,
+               count_of_unique_transponders,
+               most_popular_destination,
+               updated_at
+        FROM flight_metrics
+        WHERE id = 1
+        """
+
+        with conn.cursor() as cursor:
+            cursor.execute(sql)
+            record = cursor.fetchone()
+
+        conn.close()
+
+        if not record:
+            return {
+                "statusCode": 404,
+                "body": json.dumps({"error": "No summary data available. Refresh job may not have run yet."})
+            }
 
         result = {
-            "row_count": record[0].get("longValue"),
-            "last_transponder_seen_at": record[1].get("stringValue"),
-            "count_of_unique_transponders": record[2].get("longValue"),
-            "most_popular_destination": record[3].get("stringValue")
+            "row_count": int(record["row_count"]),
+            "last_transponder_seen_at": str(record["last_transponder_seen_at"]),
+            "count_of_unique_transponders": int(record["count_of_unique_transponders"]),
+            "most_popular_destination": record["most_popular_destination"],
+            "last_updated": str(record["updated_at"])
         }
 
         return {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"  # Optional CORS support
+                "Access-Control-Allow-Origin": "*"
             },
             "body": json.dumps(result)
         }
@@ -50,7 +69,5 @@ def lambda_handler(event, context):
     except Exception as e:
         return {
             "statusCode": 500,
-            "body": json.dumps({
-                "error": str(e)
-            })
+            "body": json.dumps({"error": str(e)})
         }
