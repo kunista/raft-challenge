@@ -1,11 +1,14 @@
 #!/bin/bash
 set -e
 
+echo "Cleaning old builds..."
+rm -rf lambda/build/*
+
 # Build api_lambda package
 cd lambda
 mkdir -p build/api_lambda
 cp api_lambda.py requirements.txt build/api_lambda/
-pip install -r requirements.txt -t build/api_lambda/
+pip install --upgrade -r requirements.txt -t build/api_lambda/
 cd build/api_lambda
 zip -r ../../../lambda/api_lambda.zip . > /dev/null
 cd ../../..
@@ -14,7 +17,7 @@ cd ../../..
 cd lambda
 mkdir -p build/ingest_lambda
 cp ingest_lambda.py requirements.txt build/ingest_lambda/
-pip install -r requirements.txt -t build/ingest_lambda/
+pip install --upgrade -r requirements.txt -t build/ingest_lambda/
 cd build/ingest_lambda
 zip -r ../../../lambda/ingest_lambda.zip . > /dev/null
 cd ../../..

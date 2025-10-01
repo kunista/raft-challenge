@@ -1,6 +1,16 @@
 import os
 import json
+import boto3
 import pymysql
+
+secrets_client = boto3.client("secretsmanager")
+
+def get_db_credentials():
+    """Fetch Aurora DB creds from Secrets Manager."""
+    secret_arn = os.environ.get("SECRET_ARN")
+    resp = secrets_client.get_secret_value(SecretId=secret_arn)
+    secret = json.loads(resp["SecretString"])
+    return secret["username"], secret["password"]
 
 def lambda_handler(event, context):
     if event is None:
@@ -13,8 +23,7 @@ def lambda_handler(event, context):
 
     DB_HOST = os.environ.get("DB_HOST")
     DB_NAME = os.environ.get("DB_NAME")
-    DB_USER = os.environ.get("DB_USER")
-    DB_PASSWORD = os.environ.get("DB_PASSWORD")
+    DB_USER, DB_PASSWORD = get_db_credentials()
 
     try:
         conn = pymysql.connect(
