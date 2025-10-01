@@ -26,9 +26,7 @@ echo "Initializing Terraform"
 terraform init
 
 echo "Applying Terraform"
-terraform apply -auto-approve \
-  -var="bucket_name=my-raft-bucket-20250928" \
-  -var="master_password=Kunista3484!"
+terraform apply -auto-approve
 
 # ------------ Fetch Terraform outputs ------------
 echo "Fetching Terraform outputs..."
