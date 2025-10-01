@@ -65,6 +65,11 @@ resource "aws_rds_cluster" "aurora" {
   }
 }
 
+resource "aws_rds_cluster_role_association" "aurora_role_assoc" {
+  db_cluster_identifier = aws_rds_cluster.aurora.id
+  role_arn              = var.aurora_s3_role_arn
+}
+
 # ----------------------------
 # Aurora Instance(s)
 # ----------------------------
