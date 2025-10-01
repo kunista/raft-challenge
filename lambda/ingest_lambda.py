@@ -14,16 +14,16 @@ def get_db_credentials():
     return secret["username"], secret["password"]
 
 def lambda_handler(event, context):
-    print("🔔 Lambda triggered with event:", json.dumps(event)[:500])  # limit size
+    print("Lambda triggered with event:", json.dumps(event)[:500])  # limit size
 
     # Extract S3 bucket + key from event
     try:
         record = event["Records"][0]
         bucket = record["s3"]["bucket"]["name"]
         key = record["s3"]["object"]["key"]
-        print(f"📦 Processing file: s3://{bucket}/{key}")
+        print(f"Processing file: s3://{bucket}/{key}")
     except Exception as e:
-        print("❌ Failed to extract S3 info:", e)
+        print("Failed to extract S3 info:", e)
         return {
             "statusCode": 400,
             "body": json.dumps({"error": "Invalid S3 event", "details": str(e)})
@@ -48,7 +48,7 @@ def lambda_handler(event, context):
             autocommit=False  # transaction handling
         )
         cursor = conn.cursor()
-        print("✅ Aurora connection established")
+        print("Aurora connection established")
 
         # Step 1: Build the LOAD DATA FROM S3 query
         load_sql = f"""
@@ -77,9 +77,9 @@ def lambda_handler(event, context):
         ;
         """
 
-        print("▶️ Running LOAD DATA FROM S3...")
+        print("Running LOAD DATA FROM S3...")
         cursor.execute(load_sql)
-        print("✅ LOAD DATA completed")
+        print("LOAD DATA completed")
 
         # Step 2: Refresh summary table
         refresh_sql = """
@@ -100,14 +100,14 @@ def lambda_handler(event, context):
         FROM flights;
         """
 
-        print("▶️ Refreshing flight_metrics summary table...")
+        print("Refreshing flight_metrics summary table...")
         cursor.execute(refresh_sql)
-        print("✅ Summary table refreshed")
+        print("Summary table refreshed")
 
         # Commit both operations
-        print("💾 Committing transaction...")
+        print("Committing transaction...")
         conn.commit()
-        print("✅ Transaction committed successfully")
+        print("Transaction committed successfully")
 
         return {
             "statusCode": 200,
@@ -117,9 +117,9 @@ def lambda_handler(event, context):
     except Exception as e:
         if conn:
             conn.rollback()
-            print("↩️ Transaction rolled back due to error")
+            print("Transaction rolled back due to error")
         tb = traceback.format_exc()
-        print("❌ Exception occurred:", e)
+        print("Exception occurred:", e)
         print(tb)
         return {
             "statusCode": 500,
@@ -133,7 +133,7 @@ def lambda_handler(event, context):
     finally:
         if cursor:
             cursor.close()
-            print("🔒 Cursor closed")
+            print("Cursor closed")
         if conn:
             conn.close()
-            print("🔒 DB connection closed")
+            print("DB connection closed")
