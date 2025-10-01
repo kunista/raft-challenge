@@ -12,15 +12,23 @@ variable "aws_default_s3_role_arn" {
   type        = string
 }
 
+# ----------------------------
+# Subnet Group (unique name to avoid VPC conflict)
+# ----------------------------
 resource "aws_db_subnet_group" "aurora" {
-  name       = "aurora-subnet-group"
+  name       = "aurora-subnet-group-custom"
   subnet_ids = var.subnet_ids
+  tags = {
+    Name = "aurora-subnet-group-custom"
+  }
 }
 
-# Create custom parameter group with aws_default_s3_role set
+# ----------------------------
+# Cluster Parameter Group
+# ----------------------------
 resource "aws_rds_cluster_parameter_group" "aurora_mysql_params" {
-  name        = "aurora-mysql-custom-params"
-  family      = "aurora-mysql8.0"  # or your specific engine family
+  name   = "aurora-mysql-custom-params"
+  family = "aurora-mysql8.0" # engine family must match Aurora engine
 
   parameter {
     name  = "aws_default_s3_role"
@@ -28,33 +36,58 @@ resource "aws_rds_cluster_parameter_group" "aurora_mysql_params" {
   }
 }
 
+# ----------------------------
+# Aurora Cluster
+# ----------------------------
 resource "aws_rds_cluster" "aurora" {
-  engine                      = "aurora-mysql"
-  engine_mode                 = "provisioned"
-  database_name               = var.db_name
-  master_username             = var.master_username
-  master_password             = var.master_password
-  db_subnet_group_name        = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids      = [var.vpc_security_group_id]
-  enable_http_endpoint        = true
-  skip_final_snapshot         = true
+  engine                          = "aurora-mysql"
+  engine_mode                     = "provisioned"
+  database_name                   = var.db_name
+  master_username                 = var.master_username
+  master_password                 = var.master_password
+  db_subnet_group_name            = aws_db_subnet_group.aurora.name
+  vpc_security_group_ids          = [var.vpc_security_group_id]
+  enable_http_endpoint            = true
+  skip_final_snapshot             = true
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora_mysql_params.name
 
   serverlessv2_scaling_configuration {
     min_capacity = 0.5
     max_capacity = 2
   }
+
+  tags = {
+    Name = "aurora-cluster"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
+# ----------------------------
+# Aurora Instance(s)
+# ----------------------------
 resource "aws_rds_cluster_instance" "aurora_instance" {
-  count              = 1
-  identifier         = "aurora-instance-${count.index}"
-  cluster_identifier = aws_rds_cluster.aurora.id
-  instance_class     = "db.serverless"
-  engine             = aws_rds_cluster.aurora.engine
+  count               = 1
+  identifier          = "aurora-instance-${count.index}"
+  cluster_identifier  = aws_rds_cluster.aurora.id
+  instance_class      = "db.serverless"
+  engine              = aws_rds_cluster.aurora.engine
   publicly_accessible = true
+
+  tags = {
+    Name = "aurora-instance-${count.index}"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
+# ----------------------------
+# Secrets Manager
+# ----------------------------
 resource "aws_secretsmanager_secret" "aurora_secret" {
   name = "aurora-db-credentials"
 }
@@ -67,9 +100,9 @@ resource "aws_secretsmanager_secret_version" "secret_version" {
   })
 }
 
-output "cluster_arn" {
-  value = aws_rds_cluster.aurora.arn
-}
+# ----------------------------
+# Outputs
+# ----------------------------
 
 output "endpoint" {
   value = aws_rds_cluster.aurora.endpoint
@@ -77,8 +110,4 @@ output "endpoint" {
 
 output "cluster_id" {
   value = aws_rds_cluster.aurora.id
-}
-
-output "secret_arn" {
-  value = aws_secretsmanager_secret.aurora_secret.arn
 }

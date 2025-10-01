@@ -1,7 +1,17 @@
 import os
 import json
 import traceback
+import boto3
 import pymysql
+
+secrets_client = boto3.client("secretsmanager")
+
+def get_db_credentials():
+    """Fetch Aurora DB creds from Secrets Manager."""
+    secret_arn = os.environ["SECRET_ARN"]
+    resp = secrets_client.get_secret_value(SecretId=secret_arn)
+    secret = json.loads(resp["SecretString"])
+    return secret["username"], secret["password"]
 
 def lambda_handler(event, context):
     print("🔔 Lambda triggered with event:", json.dumps(event)[:500])  # limit size
@@ -19,11 +29,10 @@ def lambda_handler(event, context):
             "body": json.dumps({"error": "Invalid S3 event", "details": str(e)})
         }
 
-    # DB connection details from environment
+    # DB connection details from env + secrets
     DB_HOST = os.environ["DB_HOST"]
     DB_NAME = os.environ["DB_NAME"]
-    DB_USER = os.environ["DB_USER"]
-    DB_PASSWORD = os.environ["DB_PASSWORD"]
+    DB_USER, DB_PASSWORD = get_db_credentials()
 
     conn = None
     cursor = None
