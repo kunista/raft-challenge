@@ -33,8 +33,8 @@ echo "Fetching Terraform outputs..."
 S3_BUCKET_NAME=$(terraform output -raw bucket_name)
 API_URL=$(terraform output -raw summary_function_url || true)
 
-echo "✅ S3 bucket: ${S3_BUCKET_NAME}"
-[[ -n "$API_URL" ]] && echo "✅ API Gateway URL: ${API_URL}"
+echo "S3 bucket: ${S3_BUCKET_NAME}"
+[[ -n "$API_URL" ]] && echo "API Gateway URL: ${API_URL}"
 
 # ------------ Download dataset ------------
 # Dataset details
