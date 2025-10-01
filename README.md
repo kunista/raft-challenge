@@ -23,7 +23,7 @@ Required dataset:
 Run the following script to deploy everything on your own AWS account:  
 
 ```bash
-bash scripts/deploy.sh
+./deploy.sh
 ```
 
 You would need to provide unique s3 bucket name and password.
