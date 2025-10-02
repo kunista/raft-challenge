@@ -1,6 +1,6 @@
 # Lambda execution role
 resource "aws_iam_role" "lambda_exec" {
-  name = "lambda-rds-data-role"
+  name = "lambda-rds-data-role-us-west-1"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -47,7 +47,7 @@ resource "aws_iam_role_policy" "lambda_vpc_policy" {
 
 # Lambda secrets access policy
 resource "aws_iam_policy" "lambda_secrets_policy" {
-  name = "lambda-secrets-access-policy"
+  name = "lambda-secrets-access-policy-us-west-1"
 
   policy = jsonencode({
     Version = "2012-10-17",
@@ -66,7 +66,7 @@ resource "aws_iam_role_policy_attachment" "lambda_secrets_attachment" {
 
 # Aurora S3 role
 resource "aws_iam_role" "aurora_s3_role" {
-  name = "aurora-s3-access-role"
+  name = "aurora-s3-access-role-us-west-1"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -79,7 +79,7 @@ resource "aws_iam_role" "aurora_s3_role" {
 }
 
 resource "aws_iam_policy" "aurora_s3_policy" {
-  name        = "aurora-s3-access-policy"
+  name        = "aurora-s3-access-policy-us-west-1"
   description = "Allow Aurora to read from S3 bucket"
 
   policy = jsonencode({
@@ -106,7 +106,7 @@ resource "aws_iam_role_policy_attachment" "aurora_s3_policy_attach_lambda" {
 }
 
 resource "aws_iam_policy" "terraform_full_vpc_teardown" {
-  name        = "TerraformFullVpcTeardown"
+  name        = "TerraformFullVpcTeardown-us-west-1"
   description = "Extra permissions so Terraform can destroy Lambdas, Aurora, ENIs, and EIPs cleanly"
 
   policy = jsonencode({
