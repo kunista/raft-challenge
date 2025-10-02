@@ -2,7 +2,7 @@
 resource "null_resource" "create_flights_db" {
   provisioner "local-exec" {
     command = <<EOT
-      aws rds-data execute-statement \
+      aws rds-data --region us-west-1 execute-statement \
         --resource-arn ${var.cluster_arn} \
         --secret-arn ${var.secret_arn} \
         --sql "CREATE DATABASE IF NOT EXISTS flights;"
@@ -17,7 +17,7 @@ resource "null_resource" "init_flights_table" {
 
   provisioner "local-exec" {
     command = <<EOT
-      aws rds-data execute-statement \
+      aws rds-data us-west-1 execute-statement \
         --resource-arn ${var.cluster_arn} \
         --secret-arn ${var.secret_arn} \
         --database flights \
@@ -50,7 +50,7 @@ resource "null_resource" "init_flight_metrics_table" {
 
   provisioner "local-exec" {
     command = <<EOT
-      aws rds-data execute-statement \
+      aws rds-data us-west-1 execute-statement \
         --resource-arn ${var.cluster_arn} \
         --secret-arn ${var.secret_arn} \
         --database flights \
@@ -76,7 +76,7 @@ resource "null_resource" "verify_tables" {
 
   provisioner "local-exec" {
     command = <<EOT
-      aws rds-data execute-statement \
+      aws rds-data us-west-1 execute-statement \
         --resource-arn ${var.cluster_arn} \
         --secret-arn ${var.secret_arn} \
         --database flights \
@@ -93,7 +93,7 @@ resource "null_resource" "grant_aws_load_s3_access" {
   ]
   provisioner "local-exec" {
     command = <<EOT
-    aws rds-data execute-statement \
+    aws rds-data us-west-1 execute-statement \
       --resource-arn ${var.cluster_arn} \
       --secret-arn ${var.secret_arn} \
       --database ${var.db_name} \
