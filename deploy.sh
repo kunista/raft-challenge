@@ -48,7 +48,7 @@ echo "Dataset saved as $DATASET_FILENAME"
 
 # ------------ Upload to S3 ------------
 echo "Uploading dataset to S3..."
-aws s3 cp "$DATASET_FILENAME" "s3://${S3_BUCKET_NAME}/$DATASET_FILENAME"
+aws s3 cp "$DATASET_FILENAME" "s3://${S3_BUCKET_NAME}/$DATASET_FILENAME" --region us-west-1
 
 echo "Uploaded to s3://${S3_BUCKET_NAME}/$DATASET_FILENAME"
 
